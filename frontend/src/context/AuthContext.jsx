@@ -1,140 +1,5 @@
-// import React, { createContext, useContext, useState, useEffect } from 'react';
-// import { authAPI } from '../services/api';
-
-// const AuthContext = createContext();
-
-// export const useAuth = () => {
-//   const context = useContext(AuthContext);
-//   if (!context) {
-//     throw new Error('useAuth must be used within an AuthProvider');
-//   }
-//   return context;
-// };
-
-// export const AuthProvider = ({ children }) => {
-//   const [user, setUser] = useState(null);
-//   const [loading, setLoading] = useState(true);
-//   const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-//   useEffect(() => {
-//     const token = localStorage.getItem('accessToken');
-//     if (token) {
-//       setIsAuthenticated(true);
-//     }
-//     setLoading(false);
-//   }, []);
-
-//   const login = async (email, password) => {
-//     try {
-//       const response = await authAPI.login({ email, password });
-//       const { accessToken, user } = response.data;
-      
-//       localStorage.setItem('accessToken', accessToken);
-//       setUser(user);
-//       setIsAuthenticated(true);
-      
-//       return { success: true };
-//     } catch (error) {
-//       return { 
-//         success: false, 
-//         message: error.response?.data?.message || 'Login failed' 
-//       };
-//     }
-//   };
-
-//   const signup = async (userData) => {
-//     try {
-//       const response = await authAPI.signup(userData);
-//       return { 
-//         success: true, 
-//         message: response.data.message 
-//       };
-//     } catch (error) {
-//       return { 
-//         success: false, 
-//         message: error.response?.data?.message || 'Signup failed' 
-//       };
-//     }
-//   };
-
-//   const logout = async () => {
-//     try {
-//       await authAPI.logout();
-//     } catch (error) {
-//       console.error('Logout error:', error);
-//     } finally {
-//       localStorage.removeItem('accessToken');
-//       setUser(null);
-//       setIsAuthenticated(false);
-//     }
-//   };
-
-//   const forgotPassword = async (email) => {
-//     try {
-//       const response = await authAPI.forgotPassword(email);
-//       return { 
-//         success: true, 
-//         message: response.data.message 
-//       };
-//     } catch (error) {
-//       return { 
-//         success: false, 
-//         message: error.response?.data?.message || 'Failed to send reset email' 
-//       };
-//     }
-//   };
-
-//   const resetPassword = async (token, newPassword) => {
-//     try {
-//       const response = await authAPI.resetPassword({ token, newPassword });
-//       return { 
-//         success: true, 
-//         message: response.data.message 
-//       };
-//     } catch (error) {
-//       return { 
-//         success: false, 
-//         message: error.response?.data?.message || 'Password reset failed' 
-//       };
-//     }
-//   };
-
-//   const verifyEmail = async (token) => {
-//     try {
-//       const response = await authAPI.verifyEmail(token);
-//       return { 
-//         success: true, 
-//         message: response.data.message 
-//       };
-//     } catch (error) {
-//       return { 
-//         success: false, 
-//         message: error.response?.data?.message || 'Email verification failed' 
-//       };
-//     }
-//   };
-
-//   const value = {
-//     user,
-//     isAuthenticated,
-//     loading,
-//     login,
-//     signup,
-//     logout,
-//     forgotPassword,
-//     resetPassword,
-//     verifyEmail,
-//   };
-
-//   return (
-//     <AuthContext.Provider value={value}>
-//       {children}
-//     </AuthContext.Provider>
-//   );
-// };
-
 import { createContext, useContext, useState, useEffect } from 'react';
-import { authAPI, userAPI } from '../services/api';
+import { api } from '../services'; // Import from the main services index
 
 const AuthContext = createContext();
 
@@ -148,138 +13,94 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [userCount, setUserCount] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [token, setToken] = useState(localStorage.getItem('accessToken'));
 
-  // On mount, check if token exists and validate it
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
     if (token) {
-      checkAuth();
+      // You can add token validation here
+      setLoading(false);
     } else {
       setLoading(false);
     }
-  }, []);
-
-  const checkAuth = async () => {
-    try {
-      const response = await userAPI.getProfile();
-      setUser(response.data);
-      setIsAuthenticated(true);
-    } catch (error) {
-      localStorage.removeItem('accessToken');
-      setUser(null);
-      setIsAuthenticated(false);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [token]);
 
   const login = async (email, password) => {
     try {
-      const response = await authAPI.login({ email, password });
+      const response = await api.post('/auth/login', { email, password });
       const { accessToken, user } = response.data;
-
+      
+      localStorage.setItem('user', JSON.stringify(user));
+      
       localStorage.setItem('accessToken', accessToken);
+      setToken(accessToken);
       setUser(user);
-      setIsAuthenticated(true);
-
-      return { success: true };
+     
+      return response.data;
     } catch (error) {
-      return {
-        success: false,
-        message: error.response?.data?.message || 'Login failed',
-      };
+      throw error.response?.data || { message: 'Login failed' };
     }
   };
 
   const signup = async (userData) => {
     try {
-      const response = await authAPI.signup(userData);
-      return {
-        success: true,
-        message: response.data.message,
-      };
+      const response = await api.post('/auth/signup', userData);
+      return response.data;
     } catch (error) {
-      return {
-        success: false,
-        message: error.response?.data?.message || 'Signup failed',
-      };
+      throw error.response?.data || { message: 'Signup failed' };
     }
   };
 
   const logout = async () => {
     try {
-      await authAPI.logout();
+      await api.post('/auth/logout');
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
       localStorage.removeItem('accessToken');
+      setToken(null);
       setUser(null);
-      setIsAuthenticated(false);
     }
   };
 
   const forgotPassword = async (email) => {
     try {
-      const response = await authAPI.forgotPassword(email);
-      return {
-        success: true,
-        message: response.data.message,
-      };
+      const response = await api.post('/auth/forgot-password', { email });
+      return response.data;
     } catch (error) {
-      return {
-        success: false,
-        message: error.response?.data?.message || 'Failed to send reset email',
-      };
+      throw error.response?.data || { message: 'Request failed' };
     }
   };
 
   const resetPassword = async (token, newPassword) => {
     try {
-      const response = await authAPI.resetPassword({ token, newPassword });
-      return {
-        success: true,
-        message: response.data.message,
-      };
+      const response = await api.post('/auth/reset-password', { token, newPassword });
+      return response.data;
     } catch (error) {
-      return {
-        success: false,
-        message: error.response?.data?.message || 'Password reset failed',
-      };
+      throw error.response?.data || { message: 'Reset failed' };
     }
   };
 
   const verifyEmail = async (token) => {
     try {
-      const response = await authAPI.verifyEmail(token);
-      return {
-        success: true,
-        message: response.data.message,
-      };
+      const response = await api.post('/auth/verify-email', { token });
+      return response.data;
     } catch (error) {
-      return {
-        success: false,
-        message: error.response?.data?.message || 'Email verification failed',
-      };
+      throw error.response?.data || { message: 'Verification failed' };
     }
-  };
-
-  const updateUser = (newData) => {
-    setUser((prev) => ({ ...prev, ...newData }));
   };
 
   const value = {
     user,
-    isAuthenticated,
+    token,
     loading,
     login,
     signup,
     logout,
     forgotPassword,
     resetPassword,
-    verifyEmail,
-    updateUser,
+    verifyEmail
   };
 
   return (
