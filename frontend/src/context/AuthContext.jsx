@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { api } from '../services'; // Import from the main services index
+import { api } from '../services'; 
 
 const AuthContext = createContext();
 
@@ -13,8 +13,8 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [userCount, setUserCount] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [totalUser, setTotalUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('accessToken'));
 
   useEffect(() => {
@@ -55,9 +55,11 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       await api.post('/auth/logout');
+
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
+      localStorage.removeItem('user');
       localStorage.removeItem('accessToken');
       setToken(null);
       setUser(null);
@@ -91,6 +93,19 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Apart from authentocation
+
+  const userCount = async() => {
+    try {
+      const response = await api.get('/public/user-count');
+      const {totalUsers} = response.data.data;
+      setTotalUser(totalUsers);
+      return totalUsers;
+    } catch (error) {
+      throw error.response?.data || { message: 'Unable to count users' };
+    }
+  }
+
   const value = {
     user,
     token,
@@ -100,7 +115,9 @@ export const AuthProvider = ({ children }) => {
     logout,
     forgotPassword,
     resetPassword,
-    verifyEmail
+    verifyEmail,
+    userCount,
+    totalUser
   };
 
   return (
