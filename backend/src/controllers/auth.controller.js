@@ -1,10 +1,16 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken'
-import crypto from 'crypto'; // ✅ This is required
+import crypto from 'crypto'; 
 
 
 import User from '../models/user.model.js'
-import {sendEmail} from '../nodemailer/email.js';
+// import {sendEmail} from '../nodemailer/email.js';
+
+import { sendEmail } from '../services/mailer/index.js';
+import { welcomeTemplate } from '../services/mailer/templates/welcome.js';
+import { verifyEmailTemplate } from '../services/mailer/templates/verifyEmail.js';
+import { resetPasswordTemplate } from '../services/mailer/templates/resetPassword.js';
+
 
 // Generate JWT tokens
 const generateTokens = (userId) => {
@@ -17,14 +23,14 @@ const generateTokens = (userId) => {
     const refreshToken = jwt.sign(
         { userId },
         process.env.JWT_REFRESH_SECRET,
-        { expiresIn: process.env.JWT_REFRESH_EXPIRE || '7d' } // ✅ Use correct env var
+        { expiresIn: process.env.JWT_REFRESH_EXPIRE || '7d' }
     );
 
     return { accessToken, refreshToken };
 };
 
 
-// Set cookie options
+// Set cookie 
 const cookieOptions = {
     hhtpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -36,7 +42,7 @@ const cookieOptions = {
 export const signup = async (req, res) => {
     try {
 
-        const { email, password, firstName, lastName } = req.body;
+        const { email, password, firstName, lastName, gender, weight, height } = req.body;
 
         // Validation
         if (!email || !password) {
@@ -66,6 +72,10 @@ export const signup = async (req, res) => {
         const saltRounds = 12;
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
+        // Calculate BMI
+        const heightInMeters = height / 100; // converting cm to meters
+        const bmi = weight && height ? +(weight / (heightInMeters * heightInMeters)).toFixed(2) : null;
+
         // Create user
         const newUser = new User({
             email,
@@ -73,7 +83,11 @@ export const signup = async (req, res) => {
             profile: {
                 firstName: firstName || '',
                 lastName: lastName || '',
-                preferences: {}
+                preferences: {},
+                height,
+                weight,
+                gender,
+                bmi
             },
             isEmailVerified: false,
             emailVerificationToken: crypto.randomBytes(32).toString('hex')
@@ -82,17 +96,23 @@ export const signup = async (req, res) => {
         await newUser.save();
 
         // Send verification email
+
         const verificationUrl = `${process.env.CLIENT_URL}/verify-email?token=${newUser.emailVerificationToken}`;
-        await sendEmail({
-            to: email,
-            subject: 'Verify your email',
-            html: `
-        <h2>Welcome to Our App!</h2>
-        <p>Please click the link below to verify your email:</p>
-        <a href="${verificationUrl}">Verify Email</a>
-        <p>If you didn't create this account, please ignore this email.</p>
-      `
-        })
+        const { subject, html } = verifyEmailTemplate(verificationUrl);
+        await sendEmail({ to: email, subject, html });
+
+    //     const verificationUrl = `${process.env.CLIENT_URL}/verify-email?token=${newUser.emailVerificationToken}`;
+    //     await sendEmail({
+    //         to: email,
+    //         subject: 'Verify your email',
+    //         html: `
+    //     <h2>Welcome to Our App!</h2>
+    //     <p>Please click the link below to verify your email:</p>
+    //     <a href="${verificationUrl}">Verify Email</a>
+    //     <p>If you didn't create this account, please ignore this email.</p>
+    //   `
+    //     })
+    
 
         res.status(201).json({
             success: true,
@@ -295,18 +315,24 @@ export const forgotPassword = async (req, res) => {
         await user.save();
 
         // Send reset email
-        const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${resetToken}`;    // will have to make changes
-        await sendEmail({
-            to: email,
-            subject: 'Password Reset Request',
-            html: `
-        <h2>Password Reset</h2>
-        <p>You requested a password reset. Click the link below to reset your password:</p>
-        <a href="${resetUrl}">Reset Password</a>
-        <p>This link will expire in 10 minutes.</p>
-        <p>If you didn't request this, please ignore this email.</p>
-      `
-        });
+
+        const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${resetToken}`;
+        const { subject, html } = resetPasswordTemplate(resetUrl);
+        await sendEmail({ to: email, subject, html });
+
+
+    //     const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${resetToken}`;    // will have to make changes
+    //     await sendEmail({
+    //         to: email,
+    //         subject: 'Password Reset Request',
+    //         html: `
+    //     <h2>Password Reset</h2>
+    //     <p>You requested a password reset. Click the link below to reset your password:</p>
+    //     <a href="${resetUrl}">Reset Password</a>
+    //     <p>This link will expire in 10 minutes.</p>
+    //     <p>If you didn't request this, please ignore this email.</p>
+    //   `
+    //     });
 
 
 
@@ -413,6 +439,7 @@ export const verifyEmail = async (req, res) => {
     user.isEmailVerified = true;
     user.emailVerificationToken = undefined;
     await user.save();
+
 
     res.status(200).json({
       success: true,

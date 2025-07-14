@@ -22,6 +22,7 @@ const profileSchema = new mongoose.Schema({
   fitnessLevel: { type: String, enum: ['beginner', 'intermediate', 'advanced'] },
   goals: [String], // consider enum validation if goals are fixed
   gymMembership: Boolean,
+  bmi: Number, 
   preferences: preferencesSchema
 }, { _id: false });
 
